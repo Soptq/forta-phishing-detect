@@ -360,7 +360,6 @@ describe("Should report phishing with real data from an phishing incident", () =
   });
 
 	describe("Project Galaxy Discord Hack @ 2022", () => {
-		// 7cdd 2424 dcd1 176a 2dd9 3d3b f1fe 6f58 6e1c e9e2 d3df
 		it("returns findings", async () => {
 			const tx1 = createTransactionEvent({
 				type: 0,

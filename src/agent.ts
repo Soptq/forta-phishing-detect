@@ -157,7 +157,7 @@ const addRecord = async (fromAddress: string, tokenAddress: string, targetAddres
   if (tokenTransferInCache.has(targetAddress)) {
     let transfers = tokenTransferInCache.get(targetAddress);
     // remove previous erc721 record, if any
-    transfers = transfers.filter((t: any) => t.tokenAddress !== tokenAddress);
+    transfers = transfers.filter((t: any) => t.fromAddress !== fromAddress ||  t.tokenAddress !== tokenAddress);
     // filter expired transfers
     transfers = transfers.filter((t: any) => t.timestamp > currentTimestamp - phishingWindow);
     transfers.push(record);
