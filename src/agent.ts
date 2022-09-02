@@ -215,7 +215,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(txEvent.transaction.from);
     const targetAddress = createAddress(txEvent.transaction.to);
     const amount = txEvent.transaction.value;
-    if (!(await skipChecking(targetAddress)) && !(await isContract(fromAddress))) {
+    if (!(await skipChecking(targetAddress)) && !(fromAddress in skipAddresses) && !(await isContract(fromAddress))) {
       possiblePhishingAddress.add(targetAddress)
 
       // calculate drain rate
@@ -234,7 +234,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
-    if (await skipChecking(targetAddress) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress) || (fromAddress in skipAddresses) || await isContract(fromAddress)) {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
@@ -255,7 +255,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
-    if (await skipChecking(targetAddress) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress) || (fromAddress in skipAddresses) || await isContract(fromAddress)) {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
@@ -275,7 +275,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const tokenAddress = createAddress(finding.metadata.token);
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
-    if (await skipChecking(targetAddress) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress) || (fromAddress in skipAddresses) || await isContract(fromAddress)) {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
