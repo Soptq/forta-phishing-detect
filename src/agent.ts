@@ -234,6 +234,11 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
+    // usually attackers won't spend native tokens to buy ERC20 since it will increase the variety of his tokens,
+    // and thus making laundering harder.
+    if (createAddress(txEvent.transaction.from) === targetAddress && ethers.BigNumber.from(txEvent.transaction.value).gt(0)) {
+      continue
+    }
     if (await skipChecking(targetAddress) || (skipAddresses.indexOf(fromAddress) !== -1) || await isContract(fromAddress)) {
       continue
     }
@@ -248,6 +253,11 @@ const handleTokenTransfer: HandleTransaction = async (
     const tokenAddress = createAddress(finding.metadata.token);
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
+    // usually attackers won't spend native tokens to buy ERC721 due to liquidity shortage.
+    // however, many traders will.
+    if (createAddress(txEvent.transaction.from) === targetAddress && ethers.BigNumber.from(txEvent.transaction.value).gt(0)) {
+      continue
+    }
     if (await skipChecking(targetAddress) || (skipAddresses.indexOf(fromAddress) !== -1) || await isContract(fromAddress)) {
       continue
     }
