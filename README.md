@@ -75,4 +75,4 @@ Two real world phishing incidents are tested in the `agent.spec.ts`:
 * 2022 Badger DAO incident (category: approval granted to the attacker, approved tokens are drained): https://etherscan.io/address/0x1fcdb04d0c5364fbd92c73ca8af9baa72c269107
 * 2022 Project Galaxy Discord Hack incident (category: fake NFT minting website, looks legit, funds are **NOT** drained): https://etherscan.io/address/0x8a8fa36b68df2eb9762b053303380992fdbdf7ed
 
-You can run the test by running `npm run test` (will run for several minutes), if all tests pass then the agent is ready to go.
+You can run the test by running `npm run test` (will run for several minutes, and requires archive node RPC), if all tests pass then the agent is ready to go.

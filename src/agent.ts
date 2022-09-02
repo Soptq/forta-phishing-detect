@@ -112,25 +112,7 @@ const getTokenBalance = async (tokenAddress: string, accountAddress: string, blo
   return await contract.balanceOf(accountAddress, { blockTag: blockNumber });
 }
 
-const addRecord = (fromAddress: string, tokenAddress: string, targetAddress: string, drained: boolean, currentTimestamp: number) => {
-  const record = {
-    fromAddress: fromAddress,
-    tokenAddress: tokenAddress,
-    drained: drained,
-    timestamp: currentTimestamp,
-  };
-  if (tokenTransferInCache.has(targetAddress)) {
-    let transfers = tokenTransferInCache.get(targetAddress);
-    // filter expired transfers
-    transfers = transfers.filter((t: any) => t.timestamp > currentTimestamp - phishingWindow);
-    transfers.push(record);
-    tokenTransferInCache.set(targetAddress, transfers);
-  } else {
-    tokenTransferInCache.set(targetAddress, [record])
-  }
-}
-
-const addErc721Record = async (fromAddress: string, tokenAddress: string, targetAddress: string,
+const addRecord = async (fromAddress: string, tokenAddress: string, targetAddress: string, amount: ethers.BigNumber,
                                currentTimestamp: number, blockNumber: number) => {
   if (!(erc721TransferCache.has(targetAddress))) {
     erc721TransferCache.set(targetAddress, {});
@@ -141,21 +123,30 @@ const addErc721Record = async (fromAddress: string, tokenAddress: string, target
     targetReceivedFrom[fromAddress] = {};
   }
   if (!(tokenAddress in targetReceivedFrom[fromAddress])) {
-    targetReceivedFrom[fromAddress][tokenAddress] = 1
+    let balance;
+    if (tokenAddress === createAddress("0x0")) {
+      balance = await getEthersProvider().getBalance(fromAddress, blockNumber - 1);
+    } else {
+      balance = await getTokenBalance(tokenAddress, fromAddress, blockNumber - 1);
+    }
+    targetReceivedFrom[fromAddress][tokenAddress] = {
+      amount: amount,
+      originalAmount: balance,
+    }
   } else {
-    targetReceivedFrom[fromAddress][tokenAddress] += 1;
+    targetReceivedFrom[fromAddress][tokenAddress].amount = targetReceivedFrom[fromAddress][tokenAddress].amount.add(amount);
   }
   erc721TransferCache.set(targetAddress, targetReceivedFrom);
 
-  const fromBalance = await getTokenBalance(tokenAddress, fromAddress, blockNumber);
-  let drained;
+  const fromBalance = targetReceivedFrom[fromAddress][tokenAddress].originalAmount;
   if (fromBalance.eq(0)) {
-    drained = true;
-  } else {
-    drained = ethers.BigNumber.from(targetReceivedFrom[fromAddress][tokenAddress])
-      .div(fromBalance)
-      .gte(Number((drainThreshold / (1 - drainThreshold)).toFixed(2)));
+    return;
   }
+
+  const drained = targetReceivedFrom[fromAddress][tokenAddress].amount
+    .mul(100)
+    .div(fromBalance)
+    .gte(Number(drainThreshold.toFixed(2)) * 100);
 
   const record = {
     fromAddress: fromAddress,
@@ -218,13 +209,7 @@ const handleTokenTransfer: HandleTransaction = async (
     if (!(await skipChecking(targetAddress)) && (skipAddresses.indexOf(fromAddress) === -1) && !(await isContract(fromAddress))) {
       possiblePhishingAddress.add(targetAddress)
 
-      // calculate drain rate
-      const fromBalance = await getEthersProvider().getBalance(fromAddress, blockNumber);
-      const drained = ethers.BigNumber.from(amount)
-        .div(fromBalance.add(1))
-        .gte(Number((drainThreshold / (1 - drainThreshold)).toFixed(2)));
-      // record the transfer
-      addRecord(fromAddress, createAddress("0x0"), targetAddress, drained, timestamp);
+      await addRecord(fromAddress, createAddress("0x0"), targetAddress, ethers.BigNumber.from(amount), timestamp, blockNumber);
     }
   }
 
@@ -239,13 +224,7 @@ const handleTokenTransfer: HandleTransaction = async (
     }
     possiblePhishingAddress.add(targetAddress)
 
-    // calculate drain rate
-    const fromBalance = await getEthersProvider().getBalance(fromAddress, blockNumber);
-    const drained = ethers.BigNumber.from(amount)
-      .div(fromBalance.add(1))
-      .gte(Number((drainThreshold / (1 - drainThreshold)).toFixed(2)));
-    // record the transfer
-    addRecord(fromAddress, createAddress("0x0"), targetAddress, drained, timestamp);
+    await addRecord(fromAddress, createAddress("0x0"), targetAddress, ethers.BigNumber.from(amount), timestamp, blockNumber);
   }
 
   // check erc20 transfer
@@ -260,13 +239,7 @@ const handleTokenTransfer: HandleTransaction = async (
     }
     possiblePhishingAddress.add(targetAddress)
 
-    // calculate drain rate
-    const fromBalance = await getTokenBalance(tokenAddress, fromAddress, blockNumber);
-    const drained = ethers.BigNumber.from(amount)
-      .div(fromBalance.add(1))
-      .gte(Number((drainThreshold / (1 - drainThreshold)).toFixed(2)));
-    // record the transfer
-    addRecord(fromAddress, tokenAddress, targetAddress, drained, timestamp);
+    await addRecord(fromAddress, tokenAddress, targetAddress, ethers.BigNumber.from(amount), timestamp, blockNumber);
   }
 
   // check erc721 transfer
@@ -280,7 +253,7 @@ const handleTokenTransfer: HandleTransaction = async (
     }
     possiblePhishingAddress.add(targetAddress)
 
-    await addErc721Record(fromAddress, tokenAddress, targetAddress, timestamp, blockNumber);
+    await addRecord(fromAddress, tokenAddress, targetAddress, ethers.BigNumber.from(1), timestamp, blockNumber);
   }
 
   // Analyze the results
@@ -692,7 +665,7 @@ const tryCatchHandleTransaction: HandleTransaction = async (
   try {
     return await handleTransaction(txEvent);
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return [];
   }
 }
