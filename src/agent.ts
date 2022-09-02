@@ -182,7 +182,7 @@ const isContract = async (address: string) => {
 }
 
 const skipChecking = async (address: string) => {
-  if (address in skipAddresses) {
+  if (skipAddresses.indexOf(address) !== -1) {
     return true;
   }
 
@@ -215,7 +215,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(txEvent.transaction.from);
     const targetAddress = createAddress(txEvent.transaction.to);
     const amount = txEvent.transaction.value;
-    if (!(await skipChecking(targetAddress)) && !(fromAddress in skipAddresses) && !(await isContract(fromAddress))) {
+    if (!(await skipChecking(targetAddress)) && (skipAddresses.indexOf(fromAddress) === -1) && !(await isContract(fromAddress))) {
       possiblePhishingAddress.add(targetAddress)
 
       // calculate drain rate
@@ -234,7 +234,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
-    if (await skipChecking(targetAddress) || (fromAddress in skipAddresses) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress) || (skipAddresses.indexOf(fromAddress) !== -1) || await isContract(fromAddress)) {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
@@ -255,7 +255,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
-    if (await skipChecking(targetAddress) || (fromAddress in skipAddresses) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress) || (skipAddresses.indexOf(fromAddress) !== -1) || await isContract(fromAddress)) {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
@@ -275,7 +275,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const tokenAddress = createAddress(finding.metadata.token);
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
-    if (await skipChecking(targetAddress) || (fromAddress in skipAddresses) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress) || (skipAddresses.indexOf(fromAddress) !== -1) || await isContract(fromAddress)) {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
@@ -290,7 +290,7 @@ const handleTokenTransfer: HandleTransaction = async (
     const distinctFromAddress = new Set(transfers.map((t: any) => t.fromAddress));
     const drainRate = transfers.filter((t: any) => t.drained).length / transfers.length;
     // @ts-ignore
-    if ((!(await isContract(address))) && (!(address in skipAddresses)) && distinctFromAddress.size > numTransferToEOAThreshold) {
+    if ((!(await isContract(address))) && distinctFromAddress.size > numTransferToEOAThreshold) {
       findings.push(
         Finding.fromObject({
           name: "Possible phishing EOA",
@@ -499,7 +499,7 @@ const handleTransferOutOrLaundering: HandleTransaction = async (
     const relatedAddressLowerCase = relatedAddress.map((address: string) => address.toLowerCase());
     for (const address of Array.from(monitorAddressesCache.keys())) {
       // @ts-ignore
-      if (address.toLowerCase() in relatedAddressLowerCase) {
+      if (relatedAddressLowerCase.indexOf(address.toLowerCase()) !== -1) {
         findings.push(Finding.fromObject({
           name: "Possible phishing S3",
           description: `A money laundering activity involving a monitored address is found`,
