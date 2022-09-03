@@ -233,6 +233,15 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(txEvent.transaction.from);
     const targetAddress = createAddress(txEvent.transaction.to);
     const amount = txEvent.transaction.value;
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (skipAddresses.indexOf(fromAddress) === -1) {
+        skipAddresses.push(fromAddress);
+      }
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    }
+
     if (!(await skipChecking(targetAddress, blockNumber))
       && txEvent.transaction.nonce > 0
       && skipAddresses.indexOf(fromAddress) === -1
@@ -250,6 +259,16 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
+
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (skipAddresses.indexOf(fromAddress) === -1) {
+        skipAddresses.push(fromAddress);
+      }
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    }
+
     if (await skipChecking(targetAddress, blockNumber)
       || (skipAddresses.indexOf(fromAddress) !== -1)
       || txEvent.transaction.nonce === 0
@@ -273,11 +292,22 @@ const handleTokenTransfer: HandleTransaction = async (
     }
     varietyTokenAddresses[targetAddress].add(tokenAddress)
   }
+
   for (const finding of erc20_transfer_findings) {
     const tokenAddress = createAddress(finding.metadata.token);
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
+
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (skipAddresses.indexOf(fromAddress) === -1) {
+        skipAddresses.push(fromAddress);
+      }
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    }
+
     // usually attackers won't spend native tokens to buy many ERC20 since it will increase the variety of his tokens,
     // and thus making laundering harder.
     if (createAddress(txEvent.transaction.from) === targetAddress
@@ -305,6 +335,16 @@ const handleTokenTransfer: HandleTransaction = async (
     const tokenAddress = createAddress(finding.metadata.token);
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
+
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (skipAddresses.indexOf(fromAddress) === -1) {
+        skipAddresses.push(fromAddress);
+      }
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    }
+
     // usually attackers won't spend native tokens to buy ERC721 due to liquidity shortage.
     // however, many traders will.
     if (createAddress(txEvent.transaction.from) === targetAddress && ethers.BigNumber.from(txEvent.transaction.value).gt(0)) {
@@ -325,6 +365,10 @@ const handleTokenTransfer: HandleTransaction = async (
   // Analyze the results
   const possiblePhishingAddressList = Array.from(possiblePhishingAddress);
   for (const address of possiblePhishingAddressList) {
+    // @ts-ignore
+    if (skipAddresses.indexOf(address) !== -1) {
+      continue;
+    }
     const transfers = tokenTransferInCache.get(address);
     if (!transfers) {
       continue;
@@ -348,7 +392,6 @@ const handleTokenTransfer: HandleTransaction = async (
         })
       );
     }
-
 
     if (distinctFromAddress.size > numTransferThreshold && drainRate > drainRateThreshold) {
       findings.push(
@@ -403,22 +446,34 @@ const handleTokenVarietyReduction: HandleTransaction = async (
   // eth native
   if (ethers.BigNumber.from(txEvent.transaction.value).gt(0) && !!txEvent.transaction.to) {
     const fromAddress = createAddress(txEvent.transaction.from);
-    if (monitorAddressesCache.has(fromAddress)) {
-      const currentBalance = await getEthersProvider().getBalance(fromAddress, txEvent.block.number);
-      if (currentBalance.eq(0)) {
-        findings.push(
-          Finding.fromObject({
-            name: "Possible phishing S2",
-            description: `ETH in a monitored address is drained`,
-            alertId: "VARIETY-REDUCTION",
-            severity: FindingSeverity.Medium,
-            type: FindingType.Suspicious,
-            metadata: {
-              // @ts-ignore
-              possiblePhishingAddress: fromAddress,
-            },
-          })
-        );
+    const targetAddress = createAddress(txEvent.transaction.to);
+    // hackers will not link their phishing address to their real identity
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (skipAddresses.indexOf(fromAddress) === -1) {
+        skipAddresses.push(fromAddress);
+      }
+      skipAddresses.push(fromAddress);
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    } else {
+      if (monitorAddressesCache.has(fromAddress)) {
+        const currentBalance = await getEthersProvider().getBalance(fromAddress, txEvent.block.number);
+        if (currentBalance.eq(0)) {
+          findings.push(
+            Finding.fromObject({
+              name: "Possible phishing S2",
+              description: `ETH in a monitored address is drained`,
+              alertId: "VARIETY-REDUCTION",
+              severity: FindingSeverity.Medium,
+              type: FindingType.Suspicious,
+              metadata: {
+                // @ts-ignore
+                possiblePhishingAddress: fromAddress,
+              },
+            })
+          );
+        }
       }
     }
   }
@@ -426,6 +481,19 @@ const handleTokenVarietyReduction: HandleTransaction = async (
   const eth_transfer_findings = await ethTransfersHandler.handle(txEvent);
   for (const finding of eth_transfer_findings) {
     const fromAddress = createAddress(finding.metadata.from);
+    const targetAddress = createAddress(finding.metadata.to);
+
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (skipAddresses.indexOf(fromAddress) === -1) {
+        skipAddresses.push(fromAddress);
+      }
+      skipAddresses.push(fromAddress);
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+      continue;
+    }
+
     if (monitorAddressesCache.has(fromAddress)) {
       const currentBalance = await getEthersProvider().getBalance(fromAddress, txEvent.block.number);
       if (currentBalance.eq(0)) {
@@ -451,6 +519,19 @@ const handleTokenVarietyReduction: HandleTransaction = async (
   for (const finding of erc20_transfer_findings) {
     const tokenAddress = createAddress(finding.metadata.token);
     const fromAddress = createAddress(finding.metadata.from);
+    const targetAddress = createAddress(finding.metadata.to);
+
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (skipAddresses.indexOf(fromAddress) === -1) {
+        skipAddresses.push(fromAddress);
+      }
+      skipAddresses.push(fromAddress);
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+      continue;
+    }
+
     if (monitorAddressesCache.has(fromAddress)) {
       const currentBalance = await getTokenBalance(tokenAddress, fromAddress, txEvent.block.number);
       if (currentBalance.eq(0)) {
@@ -477,6 +558,19 @@ const handleTokenVarietyReduction: HandleTransaction = async (
   for (const finding of erc721_transfer_findings) {
     const tokenAddress = createAddress(finding.metadata.token);
     const fromAddress = createAddress(finding.metadata.from);
+    const targetAddress = createAddress(finding.metadata.to);
+
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (skipAddresses.indexOf(fromAddress) === -1) {
+        skipAddresses.push(fromAddress);
+      }
+      skipAddresses.push(fromAddress);
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+      continue;
+    }
+
     if (monitorAddressesCache.has(fromAddress)) {
       const currentBalance = await getTokenBalance(tokenAddress, fromAddress, txEvent.block.number);
       if (currentBalance.eq(0)) {
@@ -553,56 +647,6 @@ const handleTransferOutOrLaundering: HandleTransaction = async (
             possiblePhishingAddress: address,
           },
         }));
-      }
-    }
-  }
-
-  // eth native
-  if (ethers.BigNumber.from(txEvent.transaction.value).gt(0) && !!txEvent.transaction.to) {
-    const fromAddress = createAddress(txEvent.transaction.from);
-    const targetAddress = createAddress(txEvent.transaction.to);
-    // hackers will not link their phishing address to their real identity
-    if (labels.exchange.isExchangeAddress(targetAddress)) {
-      if (monitorAddressesCache.has(fromAddress)) {
-        monitorAddressesCache.delete(fromAddress);
-      }
-    }
-  }
-
-  const eth_transfer_findings = await ethTransfersHandler.handle(txEvent);
-  for (const finding of eth_transfer_findings) {
-    const fromAddress = createAddress(finding.metadata.from);
-    const targetAddress = createAddress(finding.metadata.to);
-    // hackers will not link their phishing address to their real identity
-    if (labels.exchange.isExchangeAddress(targetAddress)) {
-      if (monitorAddressesCache.has(fromAddress)) {
-        monitorAddressesCache.delete(fromAddress);
-      }
-    }
-  }
-
-  // erc20
-  const erc20_transfer_findings = await erc20TransfersHandler.handle(txEvent);
-  for (const finding of erc20_transfer_findings) {
-    const fromAddress = createAddress(finding.metadata.from);
-    const targetAddress = createAddress(finding.metadata.to);
-    // hackers will not link their phishing address to their real identity
-    if (labels.exchange.isExchangeAddress(targetAddress)) {
-      if (monitorAddressesCache.has(fromAddress)) {
-        monitorAddressesCache.delete(fromAddress);
-      }
-    }
-  }
-
-  // erc721
-  const erc721_transfer_findings = await erc721TransfersHandler.handle(txEvent);
-  for (const finding of erc721_transfer_findings) {
-    const fromAddress = createAddress(finding.metadata.from);
-    const targetAddress = createAddress(finding.metadata.to);
-    // hackers will not link their phishing address to their real identity
-    if (labels.exchange.isExchangeAddress(targetAddress)) {
-      if (monitorAddressesCache.has(fromAddress)) {
-        monitorAddressesCache.delete(fromAddress);
       }
     }
   }
