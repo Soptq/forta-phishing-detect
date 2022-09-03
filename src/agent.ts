@@ -269,9 +269,10 @@ const handleTokenTransfer: HandleTransaction = async (
       }
     }
 
+    const _transactionCount = fromAddress === txEvent.transaction.from ? txEvent.transaction.nonce : await cachedGetTransactionCount(fromAddress, blockNumber);
     if (await skipChecking(targetAddress, blockNumber)
-      || (skipAddresses.indexOf(fromAddress) !== -1)
-      || txEvent.transaction.nonce === 0
+      || skipAddresses.indexOf(fromAddress) !== -1
+      || _transactionCount === 0
       || await isContract(fromAddress)
     ) {
       continue
@@ -317,9 +318,10 @@ const handleTokenTransfer: HandleTransaction = async (
     ) {
       continue
     }
+    const _transactionCount = fromAddress === txEvent.transaction.from ? txEvent.transaction.nonce : await cachedGetTransactionCount(fromAddress, blockNumber) + 1;
     if (await skipChecking(targetAddress, blockNumber)
-      || (skipAddresses.indexOf(fromAddress) !== -1)
-      || txEvent.transaction.nonce === 0
+      || skipAddresses.indexOf(fromAddress) !== -1
+      || _transactionCount === 0
       || await isContract(fromAddress))
     {
       continue
@@ -350,9 +352,10 @@ const handleTokenTransfer: HandleTransaction = async (
     if (createAddress(txEvent.transaction.from) === targetAddress && ethers.BigNumber.from(txEvent.transaction.value).gt(0)) {
       continue
     }
+    const _transactionCount = fromAddress === txEvent.transaction.from ? txEvent.transaction.nonce : await cachedGetTransactionCount(fromAddress, blockNumber);
     if (await skipChecking(targetAddress, blockNumber)
-      || (skipAddresses.indexOf(fromAddress) !== -1)
-      || txEvent.transaction.nonce === 0
+      || skipAddresses.indexOf(fromAddress) !== -1
+      || _transactionCount === 0
       || await isContract(fromAddress)
     ) {
       continue
