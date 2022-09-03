@@ -283,7 +283,7 @@ const handleTokenTransfer: HandleTransaction = async (
     if (createAddress(txEvent.transaction.from) === targetAddress
       && ethers.BigNumber.from(txEvent.transaction.value).gt(0)
       // @ts-ignore
-      && tokenAddresses[targetAddress].size > 1
+      && varietyTokenAddresses[targetAddress].size > 1
     ) {
       continue
     }
