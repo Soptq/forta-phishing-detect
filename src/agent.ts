@@ -20,7 +20,7 @@ const drainThreshold = 0.8 // if 80% of the balance is transferred, it is likely
 const numTransferThreshold = 5 // if there are more than 5 transfers in `phishingWindow` from different addresses, the drain rate can be calculated.
 const numTransferToEOAThreshold = 10 // if there are more than 10 transfers to EOA in `phishingWindow` from different addresses, it is likely to be a phishing attack.
 const drainRateThreshold = 0.8 // if 80% of the transactions of an address is defined as a drain attack, it is likely to be a phishing attack.
-const numLegitTransactions = 10000 // if the number of transactions of an account is greater than this value, it is considered to be legit.
+const numLegitTransactions = 2000 // if the number of transactions of an account is greater than this value, it is considered to be legit.
 const approvalCheck = false;
 // This is a common assumption. However, you can turn it off and this bot would still work, but the false positive would be probably higher considering many contracts have very similar activities with phishing attackers,e.g. NFT Mint, Bootstrap, FOMO.
 const assertAttackersAlwaysUseEOA = true;
@@ -45,6 +45,18 @@ const erc721TransferCache = new LRU({
 })
 
 const monitorAddressesCache = new LRU({
+  max: 100000,
+  updateAgeOnGet: true,
+  updateAgeOnHas: true,
+});
+
+const transactionCountCache = new LRU({
+  max: 100000,
+  updateAgeOnGet: true,
+  updateAgeOnHas: true,
+});
+
+const isContractCache = new LRU({
   max: 100000,
   updateAgeOnGet: true,
   updateAgeOnHas: true,
@@ -168,11 +180,26 @@ const addRecord = async (fromAddress: string, tokenAddress: string, targetAddres
 }
 
 const isContract = async (address: string) => {
+  if (isContractCache.has(address)) {
+    return isContractCache.get(address);
+  }
   const code = await getEthersProvider().getCode(address);
-  return code !== "0x";
+  const isContract = code !== "0x"
+  isContractCache.set(address, isContract);
+
+  return isContract;
 }
 
-const skipChecking = async (address: string) => {
+const cachedGetTransactionCount = async (address: string, blockNumber: number) => {
+  if (transactionCountCache.has(address)) {
+    return transactionCountCache.get(address);
+  }
+  const count = await getEthersProvider().getTransactionCount(address, blockNumber);
+  transactionCountCache.set(address, count);
+  return count;
+}
+
+const skipChecking = async (address: string, blockNumber: number) => {
   if (skipAddresses.indexOf(address) !== -1) {
     return true;
   }
@@ -182,7 +209,7 @@ const skipChecking = async (address: string) => {
     if (isContractAddress) {
       return true;
     } else {
-      return await getEthersProvider().getTransactionCount(address) > numLegitTransactions;
+      return await cachedGetTransactionCount(address, blockNumber) > numLegitTransactions;
     }
   } else {
     return false;
@@ -206,7 +233,11 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(txEvent.transaction.from);
     const targetAddress = createAddress(txEvent.transaction.to);
     const amount = txEvent.transaction.value;
-    if (!(await skipChecking(targetAddress)) && (skipAddresses.indexOf(fromAddress) === -1) && !(await isContract(fromAddress))) {
+    if (!(await skipChecking(targetAddress, blockNumber))
+      && txEvent.transaction.nonce > 0
+      && skipAddresses.indexOf(fromAddress) === -1
+      && !(await isContract(fromAddress))
+    ) {
       possiblePhishingAddress.add(targetAddress)
 
       await addRecord(fromAddress, createAddress("0x0"), targetAddress, ethers.BigNumber.from(amount), timestamp, blockNumber);
@@ -219,7 +250,11 @@ const handleTokenTransfer: HandleTransaction = async (
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
-    if (await skipChecking(targetAddress) || (skipAddresses.indexOf(fromAddress) !== -1) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress, blockNumber)
+      || (skipAddresses.indexOf(fromAddress) !== -1)
+      || txEvent.transaction.nonce === 0
+      || await isContract(fromAddress)
+    ) {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
@@ -229,17 +264,34 @@ const handleTokenTransfer: HandleTransaction = async (
 
   // check erc20 transfer
   const erc20_transfer_findings = await erc20TransfersHandler.handle(txEvent);
+  const varietyTokenAddresses: any = {};
+  for (const finding of erc20_transfer_findings) {
+    const tokenAddress = createAddress(finding.metadata.token);
+    const targetAddress = createAddress(finding.metadata.to);
+    if (!(targetAddress in varietyTokenAddresses)) {
+      varietyTokenAddresses[targetAddress] = new Set();
+    }
+    varietyTokenAddresses[targetAddress].add(tokenAddress)
+  }
   for (const finding of erc20_transfer_findings) {
     const tokenAddress = createAddress(finding.metadata.token);
     const fromAddress = createAddress(finding.metadata.from);
     const targetAddress = createAddress(finding.metadata.to);
     const amount = finding.metadata.amount;
-    // usually attackers won't spend native tokens to buy ERC20 since it will increase the variety of his tokens,
+    // usually attackers won't spend native tokens to buy many ERC20 since it will increase the variety of his tokens,
     // and thus making laundering harder.
-    if (createAddress(txEvent.transaction.from) === targetAddress && ethers.BigNumber.from(txEvent.transaction.value).gt(0)) {
+    if (createAddress(txEvent.transaction.from) === targetAddress
+      && ethers.BigNumber.from(txEvent.transaction.value).gt(0)
+      // @ts-ignore
+      && tokenAddresses[targetAddress].size > 1
+    ) {
       continue
     }
-    if (await skipChecking(targetAddress) || (skipAddresses.indexOf(fromAddress) !== -1) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress, blockNumber)
+      || (skipAddresses.indexOf(fromAddress) !== -1)
+      || txEvent.transaction.nonce === 0
+      || await isContract(fromAddress))
+    {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
@@ -258,7 +310,11 @@ const handleTokenTransfer: HandleTransaction = async (
     if (createAddress(txEvent.transaction.from) === targetAddress && ethers.BigNumber.from(txEvent.transaction.value).gt(0)) {
       continue
     }
-    if (await skipChecking(targetAddress) || (skipAddresses.indexOf(fromAddress) !== -1) || await isContract(fromAddress)) {
+    if (await skipChecking(targetAddress, blockNumber)
+      || (skipAddresses.indexOf(fromAddress) !== -1)
+      || txEvent.transaction.nonce === 0
+      || await isContract(fromAddress)
+    ) {
       continue
     }
     possiblePhishingAddress.add(targetAddress)
@@ -270,6 +326,9 @@ const handleTokenTransfer: HandleTransaction = async (
   const possiblePhishingAddressList = Array.from(possiblePhishingAddress);
   for (const address of possiblePhishingAddressList) {
     const transfers = tokenTransferInCache.get(address);
+    if (!transfers) {
+      continue;
+    }
     const distinctFromAddress = new Set(transfers.map((t: any) => t.fromAddress));
     const drainRate = transfers.filter((t: any) => t.drained).length / transfers.length;
     // @ts-ignore
@@ -498,12 +557,68 @@ const handleTransferOutOrLaundering: HandleTransaction = async (
     }
   }
 
+  // eth native
+  if (ethers.BigNumber.from(txEvent.transaction.value).gt(0) && !!txEvent.transaction.to) {
+    const fromAddress = createAddress(txEvent.transaction.from);
+    const targetAddress = createAddress(txEvent.transaction.to);
+    // hackers will not link their phishing address to their real identity
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    }
+  }
+
+  const eth_transfer_findings = await ethTransfersHandler.handle(txEvent);
+  for (const finding of eth_transfer_findings) {
+    const fromAddress = createAddress(finding.metadata.from);
+    const targetAddress = createAddress(finding.metadata.to);
+    // hackers will not link their phishing address to their real identity
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    }
+  }
+
+  // erc20
+  const erc20_transfer_findings = await erc20TransfersHandler.handle(txEvent);
+  for (const finding of erc20_transfer_findings) {
+    const fromAddress = createAddress(finding.metadata.from);
+    const targetAddress = createAddress(finding.metadata.to);
+    // hackers will not link their phishing address to their real identity
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    }
+  }
+
+  // erc721
+  const erc721_transfer_findings = await erc721TransfersHandler.handle(txEvent);
+  for (const finding of erc721_transfer_findings) {
+    const fromAddress = createAddress(finding.metadata.from);
+    const targetAddress = createAddress(finding.metadata.to);
+    // hackers will not link their phishing address to their real identity
+    if (labels.exchange.isExchangeAddress(targetAddress)) {
+      if (monitorAddressesCache.has(fromAddress)) {
+        monitorAddressesCache.delete(fromAddress);
+      }
+    }
+  }
+
   return findings
 }
 
 const handleTransaction: HandleTransaction = async (
   txEvent: TransactionEvent
 ) => {
+  // update transaction count
+  if (transactionCountCache.has(txEvent.transaction.from)) {
+    const count = transactionCountCache.get(txEvent.transaction.from);
+    transactionCountCache.set(txEvent.transaction.from, count + 1);
+  }
+
   const findings: Finding[] = [];
 
   // limiting this agent to emit only 5 findings so that the alert feed is not spammed
@@ -537,7 +652,7 @@ const handleTransaction: HandleTransaction = async (
         }
 
         const targetAddress = createAddress(container[1]);
-        if (await skipChecking(targetAddress)) {
+        if (await skipChecking(targetAddress, txEvent.block.number)) {
           continue;
         }
         const averageApprovalPerDay = container[2] * container[3] / container[4];
@@ -556,6 +671,9 @@ const handleTransaction: HandleTransaction = async (
       continue;
     }
     const transfers = tokenTransferInCache.get(phishingAddress);
+    if (!transfers) {
+      continue;
+    }
     const distinctFromAddress = new Set(transfers.map((t: any) => t.fromAddress));
     const drainRate = transfers.filter((t: any) => t.drained).length / transfers.length;
     monitorAddressesCache.set(phishingAddress, true);
@@ -628,6 +746,9 @@ const handleTransaction: HandleTransaction = async (
   for (const tokenVarietyReductionFinding of tokenVarietyReductionFindings) {
     const phishingAddress = tokenVarietyReductionFinding.metadata.possiblePhishingAddress;
     const transfers = tokenTransferInCache.get(phishingAddress);
+    if (!transfers) {
+      continue;
+    }
     const distinctFromAddress = new Set(transfers.map((t: any) => t.fromAddress));
     const drainRate = transfers.filter((t: any) => t.drained).length / transfers.length;
     findings.push(
@@ -649,6 +770,9 @@ const handleTransaction: HandleTransaction = async (
   for (const transferOutOrLaunderingFinding of transferOutOrLaunderingFindings) {
     const phishingAddress = transferOutOrLaunderingFinding.metadata.possiblePhishingAddress;
     const transfers = tokenTransferInCache.get(phishingAddress);
+    if (!transfers) {
+      continue;
+    }
     const distinctFromAddress = new Set(transfers.map((t: any) => t.fromAddress));
     const drainRate = transfers.filter((t: any) => t.drained).length / transfers.length;
     findings.push(

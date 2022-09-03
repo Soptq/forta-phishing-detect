@@ -1,6 +1,7 @@
 import { createAddress } from "forta-agent-tools";
 import genesisAddressJson from "evm-labels/lib/esm/mainnet/genesis/addresses.json"
 import exchangeAddressJson from "evm-labels/lib/esm/mainnet/exchange/addresses.json"
+import { exchange } from "evm-labels"
 
 const getIdentifiedAddresses = () => {
 	const identifiedAddresses = [];
@@ -12,9 +13,13 @@ const getIdentifiedAddresses = () => {
 		// @ts-ignore
 		identifiedAddresses.push(createAddress(address));
 	}
-	return identifiedAddresses
+	return [
+		createAddress("0x000000000000000000000000000000000000dead"),
+		...identifiedAddresses,
+	]
 }
 
 export default {
 	getIdentifiedAddresses,
+	exchange
 };

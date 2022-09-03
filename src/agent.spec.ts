@@ -567,30 +567,30 @@ describe("Should report phishing with real data from an phishing incident", () =
 			const tx8 = createTransactionEvent({
 				type: 0,
 				addresses: {
-					'0x6f585909d5a03061ed74df7eadb9f75b7ab9fcf7': true,
+					'0xb9388f42f1962a13b1b623d480b7678a5d6f3499': true,
 					'0x8a8fa36b68df2eb9762b053303380992fdbdf7ed': true
 				},
 				block: {
-					hash: '0x4ebac007927e0a7a7f77a553479fd5de1a141e35a796a377e02599b9c5045dd9',
-					number: 14619583,
-					timestamp: 1650426188
+					hash: '0xd7d06cdd154aa9631a8c76175bdde80d7f1899cd5a7fb1015b217880bde3f579',
+					number: 14619656,
+					timestamp: 1650427370
 				},
 				contractAddress: null,
 				logs: [],
 				network: 1,
 				traces: [],
 				transaction: {
-					hash: '0x11a72fab7d54c9cf7cb62291d17882ce72d59943ff2a44f053273a1bbbd63c9f',
-					from: '0x6f585909d5a03061ed74df7eadb9f75b7ab9fcf7',
+					hash: '0x9cc5b2df405a75225200a51b719ab08013659b13867f78ae4c4f4119dd839b87',
+					from: '0xb9388f42f1962a13b1b623d480b7678a5d6f3499',
 					to: '0x8a8fa36b68df2eb9762b053303380992fdbdf7ed',
-					nonce: 0,
+					nonce: 31,
 					gas: '0x5208',
-					gasPrice: '0xa8893bf6c',
+					gasPrice: '0xa4f30b672',
 					value: '0x16345785d8a0000',
 					data: '0x',
-					r: '0x6e2feddf6073a9267b2286aa2420c6e0ec157de8da27234eea81bc28dffa1998',
-					s: '0x19571c7c05ad07a883cfc7add41857ab9a9b3002ed74b75e70d3dffdcfd3a7cc',
-					v: '0x1'
+					r: '0x66d5702d047b8823d3bd677ae6de6af6f5d4e10151591165f57c83dc0a77411c',
+					s: '0x627103f65bd835cecb43d02190a2c20d3301117c3c1ff0de5455196157135ba7',
+					v: '0x0'
 				},
 			});
 			const tx9 = createTransactionEvent({
