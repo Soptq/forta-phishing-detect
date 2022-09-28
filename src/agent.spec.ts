@@ -343,9 +343,9 @@ describe("Should report phishing with real data from an phishing incident", () =
 	    findings = await handleTransaction(tx7);
 	    expect(findings).toStrictEqual([
         Finding.fromObject({
-          name: "Confirmed phishing activities",
+          name: "Possibly confirmed phishing activities",
           description: 'The reported address had received funds from 6 distinct addresses, having a drain rate of 1. It just made a transfer or swap to reduce its token variety.',
-          alertId: "CONFIRMED-PHISHING-ACTIVITIES",
+          alertId: "POSSIBLY-CONFIRMED-PHISHING-ACTIVITIES",
 	        protocol: 'ethereum',
 	        severity: FindingSeverity.High,
           type: FindingType.Suspicious,

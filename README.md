@@ -63,8 +63,8 @@ Describe each of the type of alerts fired by this agent
   - phishingAddress: the target address.
   - transactionHash: the transaction hash of the transaction that triggered the alert.
 
-- CONFIRMED-PHISHING-ACTIVITIES
-  - Fired when a possible phishing address is confirmed to be a phishing address, by gathering more evidences like token variety reduction or TC interaction.
+- POSSIBLY-CONFIRMED-PHISHING-ACTIVITIES
+  - Fired when a possible phishing address is possibly confirmed to be a phishing address, by gathering more evidences like token variety reduction or TC interaction.
   - Severity is always set to "high".
   - Type is always set to "suspicious".
   - phishingAddress: the target address.
@@ -72,7 +72,7 @@ Describe each of the type of alerts fired by this agent
 
 ## Test Data
 
-Two real world phishing incidents are tested in the `agent.spec.ts`:
+Three real world phishing incidents are tested in the `agent.spec.ts`:
 
 * 2022 SUI Network Discord Hack incident (category: privacy keys leaked to the attacker, all valued tokens are drained): https://etherscan.io/address/0x8bCe2ECAE08D11a591b4196151212f0DFa63319f
 * 2022 Badger DAO incident (category: approval granted to the attacker, approved tokens are drained): https://etherscan.io/address/0x1fcdb04d0c5364fbd92c73ca8af9baa72c269107

@@ -12,8 +12,6 @@ import { handlers, createAddress } from "forta-agent-tools";
 import labels from "./labels";
 const LRU = require('lru-cache')
 
-let findingsCount = 0;
-
 const approvalThreshold = 5 // used to filter alerts from bot `0x8badbf2ad65abc3df5b1d9cc388e419d9255ef999fb69aac6bf395646cf01c14`.
 const phishingWindow = 12 * 60 * 60 // 12 hours.
 const drainThreshold = 0.8 // if 80% of the balance is transferred, it is likely to be a drain attack.
@@ -63,7 +61,7 @@ const isContractCache = new LRU({
 });
 
 const erc20TransfersHandler = new handlers.Erc20Transfers({
-  onFinding(metadata) {
+  onFinding(metadata: any) {
     return Finding.from({
       name: "ERC20 transfer",
       description: "A ERC20 transfer was detected",
@@ -81,7 +79,7 @@ const erc20TransfersHandler = new handlers.Erc20Transfers({
 });
 
 const erc721TransfersHandler = new handlers.Erc721Transfers({
-  onFinding(metadata) {
+  onFinding(metadata: any) {
     return Finding.from({
       name: "ERC721 transfer",
       description: "A ERC721 transfer was detected",
@@ -99,7 +97,7 @@ const erc721TransfersHandler = new handlers.Erc721Transfers({
 });
 
 const ethTransfersHandler = new handlers.EthTransfers({
-  onFinding(metadata) {
+  onFinding(metadata: any) {
     return Finding.from({
       name: "Ether transfer",
       description: "A ether transfer was detected",
@@ -425,7 +423,7 @@ const handleTokenVarietyReduction: HandleTransaction = async (
 ) => {
   const blacklistedAddressesHandler = new handlers.BlacklistedAddresses({
     addresses: Array.from(monitorAddressesCache.keys()),
-    onFinding(metadata) {
+    onFinding(metadata: any) {
       return Finding.from({
         name: "Monitored Address",
         description: "A transaction involving a monitored address was found",
@@ -605,7 +603,7 @@ const handleTransferOutOrLaundering: HandleTransaction = async (
 ) => {
   const blacklistedAddressesHandler = new handlers.BlacklistedAddresses({
     addresses: Array.from(monitorAddressesCache.keys()),
-    onFinding(metadata) {
+    onFinding(metadata: any) {
       return Finding.from({
         name: "Monitored Address",
         description: "A transaction involving a monitored address was found",
@@ -667,9 +665,6 @@ const handleTransaction: HandleTransaction = async (
   }
 
   const findings: Finding[] = [];
-
-  // limiting this agent to emit only 5 findings so that the alert feed is not spammed
-  if (findingsCount >= 5) return findings;
 
   // get some suspicious approval EOAs.
   if (approvalCheck) {
@@ -800,9 +795,9 @@ const handleTransaction: HandleTransaction = async (
     const drainRate = transfers.filter((t: any) => t.drained).length / transfers.length;
     findings.push(
       Finding.fromObject({
-        name: "Confirmed phishing activities",
+        name: "Possibly confirmed phishing activities",
         description: `The reported address had received funds from ${distinctFromAddress.size} distinct addresses, having a drain rate of ${drainRate}. It just made a transfer or swap to reduce its token variety.`,
-        alertId: "CONFIRMED-PHISHING-ACTIVITIES",
+        alertId: "POSSIBLY-CONFIRMED-PHISHING-ACTIVITIES",
         severity: FindingSeverity.High,
         type: FindingType.Suspicious,
         metadata: {
@@ -811,6 +806,7 @@ const handleTransaction: HandleTransaction = async (
         },
       })
     );
+    tokenTransferInCache.delete(phishingAddress);
   }
 
   const transferOutOrLaunderingFindings = await handleTransferOutOrLaundering(txEvent);
@@ -824,9 +820,9 @@ const handleTransaction: HandleTransaction = async (
     const drainRate = transfers.filter((t: any) => t.drained).length / transfers.length;
     findings.push(
       Finding.fromObject({
-        name: "Confirmed phishing activities",
+        name: "Possibly confirmed phishing activities",
         description: `The reported address had received funds from ${distinctFromAddress.size} distinct addresses, having a drain rate of ${drainRate}. It just made a interaction with TC.`,
-        alertId: "CONFIRMED-PHISHING-ACTIVITIES",
+        alertId: "POSSIBLY-CONFIRMED-PHISHING-ACTIVITIES",
         severity: FindingSeverity.High,
         type: FindingType.Suspicious,
         metadata: {
@@ -835,6 +831,7 @@ const handleTransaction: HandleTransaction = async (
         },
       })
     );
+    tokenTransferInCache.delete(phishingAddress);
   }
 
   return findings;

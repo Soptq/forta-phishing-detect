@@ -1,7 +1,7 @@
 {
-  "name": "forta-agent-starter",
-  "version": "0.0.1",
-  "description": "Forta Agent Typescript starter project",
+  "name": "forta-phishing-detect",
+  "version": "0.1.1",
+  "description": "This agent detects phishing activities using on-chain data.",
   "chainIds": [
     1,
     10,
@@ -27,6 +27,7 @@
     "keyfile": "forta-agent keyfile",
     "test": "jest"
   },
+  "repository": "https://github.com/Soptq/forta-phishing-detect",
   "dependencies": {
     "evm-labels": "^0.0.3",
     "forta-agent": "^0.1.9",
